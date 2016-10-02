@@ -30,6 +30,8 @@ static void decompress_entries(std::vector<uint8_t> const & src_buffer) {
 	archive_entry cur_ent;
 	int state = -3;
 	
+	entries.clear();
+	
 	for (uint8_t const & c : src_buffer) {
 		switch (state) {
 			case -3:
@@ -250,7 +252,19 @@ static std::string randy(unsigned long num, std::vector<char> & char_map) {
 static std::string guided_randy() {
 	unsigned long numc = input_uint("Num Characters");
 	std::vector<char> char_map = input_charmap();
-	return randy(numc, char_map);
+	for (;;) {
+		std::string pwd = randy(numc, char_map);
+		printf("New Password: %s\n", pwd.c_str());
+		if (!input_yn("Regenerate?")) return pwd;
+	}
+}
+
+static std::string passgen() {
+	if (input_yn("Generate Password Randomly?")) {
+		return guided_randy();
+	} else {
+		return input_str("Enter Manual Password");
+	}
 }
 
 std::vector<uint8_t> encrypt_vector(std::vector<uint8_t> encvec, cryptor & c, std::unique_ptr<HashFunction> & hash_func, std::string & key) {
@@ -391,7 +405,7 @@ static void cmd_add() {
 	archive_entry ent {
 		input_str("Site"),
 		input_str("Username"),
-		guided_randy(),
+		passgen(),
 		input_str("Additional Info"),
 	};
 	entries.push_back( ent );
@@ -423,15 +437,30 @@ static void cmd_find() {
 }
 
 static void cmd_save(std::fstream & archive_file) {
-	archive_file.seekg(0, std::ios::beg);
-	std::vector<uint8_t> save_buffer = compress_entries();
-	
-	cryptor crypt = input_cipher("Vault Cipher");
-	std::unique_ptr<HashFunction> hash = input_hash("Vault Key Hash Function");
-	std::string key = input_str("Vault Key");
-	
-	std::vector<uint8_t> enc_save_buffer = encrypt_vector(save_buffer, crypt, hash, key);
-	archive_file.write(reinterpret_cast<char *>(enc_save_buffer.data()), enc_save_buffer.size());
+	try {
+		archive_file.seekg(0, std::ios::beg);
+		std::vector<uint8_t> save_buffer = compress_entries();
+		
+		cryptor crypt = input_cipher("Vault Cipher");
+		std::unique_ptr<HashFunction> hash = input_hash("Vault Key Hash Function");
+		std::string key = input_str("Vault Key");
+		
+		std::vector<uint8_t> enc_save_buffer = encrypt_vector(save_buffer, crypt, hash, key);
+		std::vector<uint8_t> verify_buf = decrypt_vector(enc_save_buffer, crypt, hash, key);
+		decompress_entries(verify_buf);
+		
+		archive_file.write(reinterpret_cast<char *>(enc_save_buffer.data()), enc_save_buffer.size());
+	} catch (std::exception & e) {
+		
+	}
+}
+
+static void cmd_passwd() {
+	size_t index = input_index("Entries Index");
+	print_entry(index);
+	if (input_yn("Change Password for This Entry?")) {
+		entries[index].pwd = passgen();
+	}
 }
 
 //================================================================
@@ -508,6 +537,8 @@ int main(int argc, char * * argv) {
 			cmd_find();
 		} else if (inp == "save") {
 			cmd_save(archive_file);
+		} else if (inp == "passwd") {
+			cmd_passwd();
 		} else if (inp == "exit" || inp == "quit") {
 			break;
 		} else {
