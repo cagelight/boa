@@ -23,7 +23,7 @@ def options(opt):
 
 def configure(ctx):
 	ctx.load("g++")
-	ctx.check_cfg(path='pkg-config', args='--cflags --libs', package='botan-1.11', uselib_store='BOTAN')
+	ctx.check_cfg(path='pkg-config', args='--cflags --libs', package='botan-2', uselib_store='BOTAN')
 	btup = ctx.options.build_type.upper()
 	if btup in ["DEBUG", "NATIVE", "RELEASE"]:
 		Logs.pprint("PINK", "Setting up environment for known build type: " + btup)
